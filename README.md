@@ -4,19 +4,19 @@ Go temp-mail.org wrapper
 ## Example
 ```
 // Get client
-client := gotempmail.GetClient()
+client := lib.GetClient()
 
 // Get domains
 domains := client.GetDomains()
 fmt.Println(domains)
-// Needed, ALWAYS DO THIS
 client.Domains = domains
 
 // Set address
-address := "bunny" + domains[3]
+address := "bunny" + domains[0]
 _, hash := client.SetAddress(address)
 if len(hash) > 0 {
-    // Needed, ALWAYS DO THIS
+    
+    // REQUIRED
     client.AddressHash = hash
     client.Address = address
     fmt.Println("Set email: " + address)
@@ -29,10 +29,27 @@ for i := 1; i <= 50; i++ {
     time.Sleep(3 * time.Second)
     mails, err := client.CheckMail()
     if err == nil {
-        result_, _ := json.Marshal(mails)
-        fmt.Println(string(result_))
-        break
+        for _, mail := range mails{
+            result_, _ := json.Marshal(mail)
+            fmt.Println(string(result_))
+				
+            // Get attachments
+            attachments, err2 := client.GetAttachments(mail.MailId)
+            if err2 == nil {
+                for _, attachment := range attachments{
+                    /*
+                    File is in attachment.Body as base64 encoded byte array
+                    */
+                    header, _ := json.Marshal(attachment.Header)
+                    fmt.Println(string(header))
+                }
+            }
+				
+            // Delete email
+            client.DeleteMail(mail.MailId)
+        }
+    } else {
+        fmt.Println(err)
     }
-    fmt.Println(err)
 }
 ```

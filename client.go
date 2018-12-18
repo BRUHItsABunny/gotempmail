@@ -23,6 +23,16 @@ type Mail struct {
 	MailTimeStamp   float64 `json:"mail_timestamp"`
 }
 
+type Attachment struct {
+	Header struct {
+		ContentType             string `json:"content-type"`
+		ContentDisposition      string `json:"content-disposition"`
+		ContentTransferEncoding string `json:"content-transfer-encoding"`
+		ContentID               string `json:"x-attachment-id"`
+	} `json:"header"`
+	Body string `json:"body"`
+}
+
 type MailClient struct {
 	Client      *http.Client
 	Address     string
@@ -101,8 +111,8 @@ func (client MailClient) CheckMail() ([]Mail, error) {
 			log.Fatalln(err)
 			return nil, err
 		}
+		bodyBytes, err2 := ioutil.ReadAll(resp.Body)
 		if resp.StatusCode != 404 {
-			bodyBytes, err2 := ioutil.ReadAll(resp.Body)
 			if err2 != nil {
 				log.Fatalln(err2)
 				return nil, err2
@@ -119,4 +129,60 @@ func (client MailClient) CheckMail() ([]Mail, error) {
 		return nil, errors.New("no emails yet")
 	}
 	return nil, errors.New("need to set email address first")
+}
+
+func (client MailClient) DeleteMail(mailId string) {
+	if len(client.Address) > 0 {
+		resp, err := client.Client.Do(client.makeRequest(client.BaseURL + "delete/id/" + mailId + client.URLSuffix))
+		if err != nil {
+			log.Fatalln(err)
+		}
+		_, err2 := ioutil.ReadAll(resp.Body)
+		if err2 != nil {
+			log.Fatalln(err2)
+		}
+	}
+}
+
+func (client MailClient) GetAttachments(mailId string) ([]Attachment, error) {
+	if len(client.Address) > 0 {
+		url := client.BaseURL + "attachments/id/" + mailId + client.URLSuffix
+		resp, err := client.Client.Do(client.makeRequest(url))
+		if err != nil {
+			log.Fatalln(err)
+			return nil, err
+		}
+		bodyBytes, err2 := ioutil.ReadAll(resp.Body)
+		if resp.StatusCode != 404 {
+			if err2 != nil {
+				log.Fatalln(err2)
+				return nil, err2
+			}
+			var result [][]Attachment
+			_ = json.Unmarshal(bodyBytes, &result)
+			for index, attachment := range result[0] {
+				result[0][index].Body = client.Regex.ReplaceAllString(attachment.Body, "")
+			}
+			return result[0], nil
+		}
+		return nil, errors.New("no attachments in this email")
+	}
+	return nil, errors.New("need to set email address first")
+}
+
+func (client MailClient) GetRawMail(mailId string) (string, error) {
+	if len(client.Address) > 0 {
+		url := client.BaseURL + "source/id/" + mailId + client.URLSuffix
+		resp, err := client.Client.Do(client.makeRequest(url))
+		if err != nil {
+			log.Fatalln(err)
+			return "", err
+		}
+		bodyBytes, err2 := ioutil.ReadAll(resp.Body)
+		if err2 != nil {
+			log.Fatalln(err2)
+			return "", err2
+		}
+		return string(bodyBytes), nil
+	}
 }
