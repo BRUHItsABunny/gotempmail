@@ -4,7 +4,7 @@ Go temp-mail.org wrapper
 ## Example
 ```
 // Get client
-client := lib.GetClient()
+client := gotempmail.GetClient()
 
 // Get domains
 domains := client.GetDomains()
