@@ -68,18 +68,16 @@ func GetClient() MailClient {
 		Regex:       regexp.MustCompile(`^[\s\p{Zs}]+|[\s\p{Zs}]+$`)}
 }
 
-func (client MailClient) GetDomains() []string {
+func (client *MailClient) GetDomains() []string {
 	if client.Domains == nil {
 		var result []string
 		resp, err := client.Client.Do(client.makeRequest(client.BaseURL + "domains" + client.URLSuffix))
 		if err != nil {
 			log.Fatalln(err)
-			return nil
 		}
 		bodyBytes, err2 := ioutil.ReadAll(resp.Body)
 		if err2 != nil {
 			log.Fatalln(err2)
-			return nil
 		}
 		_ = json.Unmarshal(bodyBytes, &result)
 		client.Domains = result
@@ -87,7 +85,8 @@ func (client MailClient) GetDomains() []string {
 	return client.Domains
 }
 
-func (client MailClient) SetAddress(address string) (string, string) {
+func (client *MailClient) SetAddress(address string) bool {
+	result_ := false
 	validator := strings.Split(address, "@")
 	domains := client.GetDomains()
 	if len(validator) == 2 {
@@ -96,11 +95,13 @@ func (client MailClient) SetAddress(address string) (string, string) {
 			if element == validator[1] {
 				result := md5.Sum([]byte(address))
 				hash := hex.EncodeToString(result[:])
-				return address, hash
+				client.Address = address
+				client.AddressHash = hash
+				result_ = true
 			}
 		}
 	}
-	return "", ""
+	return result_
 }
 
 func (client MailClient) CheckMail() ([]Mail, error) {
@@ -185,4 +186,5 @@ func (client MailClient) GetRawMail(mailId string) (string, error) {
 		}
 		return string(bodyBytes), nil
 	}
+	return "", errors.New("need to set email address first")
 }

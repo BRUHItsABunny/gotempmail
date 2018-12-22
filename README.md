@@ -9,17 +9,13 @@ client := gotempmail.GetClient()
 // Get domains
 domains := client.GetDomains()
 fmt.Println(domains)
-client.Domains = domains
 
 // Set address
 address := "bunny" + domains[0]
-_, hash := client.SetAddress(address)
-if len(hash) > 0 {
-    
-    // REQUIRED
-    client.AddressHash = hash
-    client.Address = address
-    fmt.Println("Set email: " + address)
+res := client.SetAddress(address)
+if res {
+    fmt.Println(client.Address)
+    fmt.Println(client.AddressHash)
 } else {
     fmt.Println("Didn't set email, domain doesnt match up (" + address + ")")
 }
@@ -32,7 +28,7 @@ for i := 1; i <= 50; i++ {
         for _, mail := range mails{
             result_, _ := json.Marshal(mail)
             fmt.Println(string(result_))
-				
+
             // Get attachments
             attachments, err2 := client.GetAttachments(mail.MailId)
             if err2 == nil {
@@ -44,7 +40,7 @@ for i := 1; i <= 50; i++ {
                     fmt.Println(string(header))
                 }
             }
-				
+
             // Delete email
             client.DeleteMail(mail.MailId)
         }
