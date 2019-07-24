@@ -3,63 +3,24 @@ package gotempmail
 import (
 	"crypto/md5"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
-	"io/ioutil"
-	"log"
+	"github.com/BRUHItsABunny/gOkHttp"
 	"net/http"
 	"regexp"
 	"strings"
-	"time"
 )
-
-type Mail struct {
-	MailId          string  `json:"mail_id"`
-	MailAddressId   string  `json:"mail_address_id"`
-	MailFrom        string  `json:"mail_from"`
-	MailFromAddress string  `json:"mail_from_address"`
-	MailSubject     string  `json:"mail_subject"`
-	MailText        string  `json:"mail_text"`
-	MailTimeStamp   float64 `json:"mail_timestamp"`
-}
-
-type Attachment struct {
-	Header struct {
-		ContentType             string `json:"content-type"`
-		ContentDisposition      string `json:"content-disposition"`
-		ContentTransferEncoding string `json:"content-transfer-encoding"`
-		ContentID               string `json:"x-attachment-id"`
-	} `json:"header"`
-	Body string `json:"body"`
-}
-
-type MailClient struct {
-	Client      *http.Client
-	Address     string
-	AddressHash string
-	Domains     []string
-	BaseURL     string
-	URLSuffix   string
-	Regex       *regexp.Regexp
-}
-
-func (client MailClient) makeRequest(url string) *http.Request {
-	req, _ := http.NewRequest("GET", url, nil)
-	req.Header.Add("Accept", "application/json")
-	req.Header.Add("Authorization", "Basic OGM4ODA4YTAtYTQ3ZC00MDkxLTllM2QtODhlMDYwM2ViMzY5OmplWTJTVFliMg==")
-	req.Header.Add("User-Agent", "okhttp/3.5.0")
-	return req
-}
 
 func GetClient() MailClient {
 	var domains []string
-	return MailClient{Client: &http.Client{
-		Timeout: time.Second * 10,
-		Transport: &http.Transport{
-			TLSHandshakeTimeout: 5 * time.Second,
-			DisableCompression:  false,
-			DisableKeepAlives:   false,
-		}},
+	options := gokhttp.HttpClientOptions{
+		Headers: map[string]string{
+			"Accept":        "application/json",
+			"Authorization": "Basic OGM4ODA4YTAtYTQ3ZC00MDkxLTllM2QtODhlMDYwM2ViMzY5OmplWTJTVFliMg==",
+			"User-Agent":    "okhttp/3.5.0",
+		},
+	}
+	client := gokhttp.GetHTTPClient(&options)
+	return MailClient{Client: &client,
 		Address:     "",
 		AddressHash: "",
 		Domains:     domains,
@@ -68,123 +29,161 @@ func GetClient() MailClient {
 		Regex:       regexp.MustCompile(`^[\s\p{Zs}]+|[\s\p{Zs}]+$`)}
 }
 
-func (client *MailClient) GetDomains() []string {
-	if client.Domains == nil {
-		var result []string
-		resp, err := client.Client.Do(client.makeRequest(client.BaseURL + "domains" + client.URLSuffix))
-		if err != nil {
-			log.Fatalln(err)
-		}
-		bodyBytes, err2 := ioutil.ReadAll(resp.Body)
-		if err2 != nil {
-			log.Fatalln(err2)
-		}
-		_ = json.Unmarshal(bodyBytes, &result)
-		client.Domains = result
-	}
-	return client.Domains
-}
+func (client *MailClient) GetDomains() ([]string, error) {
 
-func (client *MailClient) SetAddress(address string) bool {
-	result_ := false
-	validator := strings.Split(address, "@")
-	domains := client.GetDomains()
-	if len(validator) == 2 {
-		validator[1] = "@" + validator[1]
-		for _, element := range domains {
-			if element == validator[1] {
-				result := md5.Sum([]byte(address))
-				hash := hex.EncodeToString(result[:])
-				client.Address = address
-				client.AddressHash = hash
-				result_ = true
+	var result []string
+	var err error
+	var resp *gokhttp.HttpResponse
+	var req *http.Request
+
+	if client.Domains == nil {
+		req, err = client.Client.MakeGETRequest(client.BaseURL+"domains"+client.URLSuffix, map[string]string{}, map[string]string{})
+		if err == nil {
+			resp, err = client.Client.Do(req)
+			if err == nil {
+				err = resp.Object(&result)
+				if err == nil {
+					client.Domains = result
+					return result, nil
+				}
 			}
 		}
+	} else {
+		return client.Domains, nil
 	}
-	return result_
+	return nil, err
+}
+
+func (client *MailClient) SetAddress(address string) error {
+	validator := strings.Split(address, "@")
+	domains, err := client.GetDomains()
+	if err == nil {
+		if len(validator) == 2 {
+			validator[1] = "@" + validator[1]
+			err = errors.New("invalid domain")
+			for _, element := range domains {
+				if element == validator[1] {
+					result := md5.Sum([]byte(address))
+					hash := hex.EncodeToString(result[:])
+					client.Address = address
+					client.AddressHash = hash
+					err = nil
+					break
+				}
+			}
+		} else {
+			err = errors.New("invalid email address")
+		}
+	}
+	return err
 }
 
 func (client MailClient) CheckMail() ([]Mail, error) {
+
 	var result []Mail
+	var err error
+	var req *http.Request
+	var resp *gokhttp.HttpResponse
+
 	if len(client.Address) > 0 {
-		resp, err := client.Client.Do(client.makeRequest(client.BaseURL + "mail/id/" + client.AddressHash + client.URLSuffix))
-		if err != nil {
-			log.Fatalln(err)
-			return nil, err
-		}
-		bodyBytes, err2 := ioutil.ReadAll(resp.Body)
-		if resp.StatusCode != 404 {
-			if err2 != nil {
-				log.Fatalln(err2)
-				return nil, err2
+		req, err = client.Client.MakeGETRequest(client.BaseURL+"mail/id/"+client.AddressHash+client.URLSuffix, map[string]string{}, map[string]string{})
+		if err == nil {
+			resp, err = client.Client.Do(req)
+			if err == nil {
+				if resp.StatusCode != 404 {
+					err = resp.Object(&result)
+					if err == nil {
+						for index, mail := range result {
+							from := strings.Split(mail.MailFrom, " ")
+							address := strings.TrimLeft(strings.TrimRight(from[1], ">"), "<")
+							result[index].MailFrom = strings.Replace(strings.Replace(result[index].MailFrom, "\u003e", "", 1), "\u003c", "", 1)
+							result[index].MailFromAddress = address
+							result[index].MailText = client.Regex.ReplaceAllString(mail.MailText, "")
+						}
+						return result, nil
+					}
+				} else {
+					err = errors.New("no emails yet")
+				}
 			}
-			_ = json.Unmarshal(bodyBytes, &result)
-			for index, mail := range result {
-				from := strings.Split(mail.MailFrom, " ")
-				address := strings.TrimLeft(strings.TrimRight(from[1], ">"), "<")
-				result[index].MailFromAddress = address
-				result[index].MailText = client.Regex.ReplaceAllString(mail.MailText, "")
-			}
-			return result, nil
 		}
-		return nil, errors.New("no emails yet")
+	} else {
+		err = errors.New("need to set email address first")
 	}
-	return nil, errors.New("need to set email address first")
+	return nil, err
 }
 
-func (client MailClient) DeleteMail(mailId string) {
+func (client MailClient) DeleteMail(mailId string) error {
+
+	var err error
+	var req *http.Request
+	var resp *gokhttp.HttpResponse
+
 	if len(client.Address) > 0 {
-		resp, err := client.Client.Do(client.makeRequest(client.BaseURL + "delete/id/" + mailId + client.URLSuffix))
-		if err != nil {
-			log.Fatalln(err)
+		req, err = client.Client.MakeGETRequest(client.BaseURL+"delete/id/"+mailId+client.URLSuffix, map[string]string{}, map[string]string{})
+		if err == nil {
+			resp, err = client.Client.Do(req)
+			if err == nil {
+				_, err = resp.Bytes()
+			}
 		}
-		_, err2 := ioutil.ReadAll(resp.Body)
-		if err2 != nil {
-			log.Fatalln(err2)
-		}
+	} else {
+		err = errors.New("need to set email address first")
 	}
+	return err
 }
 
 func (client MailClient) GetAttachments(mailId string) ([]Attachment, error) {
+
+	var err error
+	var req *http.Request
+	var resp *gokhttp.HttpResponse
+	var result [][]Attachment
+
 	if len(client.Address) > 0 {
-		url := client.BaseURL + "attachments/id/" + mailId + client.URLSuffix
-		resp, err := client.Client.Do(client.makeRequest(url))
-		if err != nil {
-			log.Fatalln(err)
-			return nil, err
-		}
-		bodyBytes, err2 := ioutil.ReadAll(resp.Body)
-		if resp.StatusCode != 404 {
-			if err2 != nil {
-				log.Fatalln(err2)
-				return nil, err2
+		req, err = client.Client.MakeGETRequest(client.BaseURL+"attachments/id/"+mailId+client.URLSuffix, map[string]string{}, map[string]string{})
+		if err == nil {
+			resp, err = client.Client.Do(req)
+			if err == nil {
+				if resp.StatusCode != 404 {
+					err = resp.Object(&result)
+					if err == nil {
+						for index, attachment := range result[0] {
+							result[0][index].Body = client.Regex.ReplaceAllString(attachment.Body, "")
+						}
+						return result[0], nil
+					}
+				} else {
+					err = errors.New("email doesn't exist")
+				}
 			}
-			var result [][]Attachment
-			_ = json.Unmarshal(bodyBytes, &result)
-			for index, attachment := range result[0] {
-				result[0][index].Body = client.Regex.ReplaceAllString(attachment.Body, "")
-			}
-			return result[0], nil
 		}
-		return nil, errors.New("no attachments in this email")
+	} else {
+		err = errors.New("need to set email address first")
 	}
-	return nil, errors.New("need to set email address first")
+	return nil, err
 }
 
 func (client MailClient) GetRawMail(mailId string) (string, error) {
+
+	var err error
+	var req *http.Request
+	var resp *gokhttp.HttpResponse
+	var result string
+
 	if len(client.Address) > 0 {
-		url := client.BaseURL + "source/id/" + mailId + client.URLSuffix
-		resp, err := client.Client.Do(client.makeRequest(url))
-		if err != nil {
-			log.Fatalln(err)
-			return "", err
+		req, err = client.Client.MakeGETRequest(client.BaseURL+"source/id/"+mailId+client.URLSuffix, map[string]string{}, map[string]string{})
+		if err == nil {
+			resp, err = client.Client.Do(req)
+			if err == nil {
+				result, err = resp.Text()
+				if err == nil {
+					return result, nil
+				}
+			}
 		}
-		bodyBytes, err2 := ioutil.ReadAll(resp.Body)
-		if err2 != nil {
-			log.Fatalln(err2)
-			return "", err2
-		}
-		return string(bodyBytes), nil
+	} else {
+		err = errors.New("need to set email address first")
 	}
-	return "", errors.New("need to set email address first")
+	return "", err
 }
