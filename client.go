@@ -6,6 +6,7 @@ import (
 	"errors"
 	"github.com/BRUHItsABunny/gOkHttp"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 )
@@ -37,7 +38,7 @@ func (client *MailClient) GetDomains() ([]string, error) {
 	var req *http.Request
 
 	if client.Domains == nil {
-		req, err = client.Client.MakeGETRequest(client.BaseURL+"domains"+client.URLSuffix, map[string]string{}, map[string]string{})
+		req, err = client.Client.MakeGETRequest(client.BaseURL+"domains"+client.URLSuffix, url.Values{}, map[string]string{})
 		if err == nil {
 			resp, err = client.Client.Do(req)
 			if err == nil {
@@ -86,7 +87,7 @@ func (client MailClient) CheckMail() ([]Mail, error) {
 	var resp *gokhttp.HttpResponse
 
 	if len(client.Address) > 0 {
-		req, err = client.Client.MakeGETRequest(client.BaseURL+"mail/id/"+client.AddressHash+client.URLSuffix, map[string]string{}, map[string]string{})
+		req, err = client.Client.MakeGETRequest(client.BaseURL+"mail/id/"+client.AddressHash+client.URLSuffix, url.Values{}, map[string]string{})
 		if err == nil {
 			resp, err = client.Client.Do(req)
 			if err == nil {
@@ -120,7 +121,7 @@ func (client MailClient) DeleteMail(mailId string) error {
 	var resp *gokhttp.HttpResponse
 
 	if len(client.Address) > 0 {
-		req, err = client.Client.MakeGETRequest(client.BaseURL+"delete/id/"+mailId+client.URLSuffix, map[string]string{}, map[string]string{})
+		req, err = client.Client.MakeGETRequest(client.BaseURL+"delete/id/"+mailId+client.URLSuffix, url.Values{}, map[string]string{})
 		if err == nil {
 			resp, err = client.Client.Do(req)
 			if err == nil {
@@ -141,7 +142,7 @@ func (client MailClient) GetAttachments(mailId string) ([]Attachment, error) {
 	var result [][]Attachment
 
 	if len(client.Address) > 0 {
-		req, err = client.Client.MakeGETRequest(client.BaseURL+"attachments/id/"+mailId+client.URLSuffix, map[string]string{}, map[string]string{})
+		req, err = client.Client.MakeGETRequest(client.BaseURL+"attachments/id/"+mailId+client.URLSuffix, url.Values{}, map[string]string{})
 		if err == nil {
 			resp, err = client.Client.Do(req)
 			if err == nil {
@@ -172,7 +173,7 @@ func (client MailClient) GetRawMail(mailId string) (string, error) {
 	var result string
 
 	if len(client.Address) > 0 {
-		req, err = client.Client.MakeGETRequest(client.BaseURL+"source/id/"+mailId+client.URLSuffix, map[string]string{}, map[string]string{})
+		req, err = client.Client.MakeGETRequest(client.BaseURL+"source/id/"+mailId+client.URLSuffix, url.Values{}, map[string]string{})
 		if err == nil {
 			resp, err = client.Client.Do(req)
 			if err == nil {
